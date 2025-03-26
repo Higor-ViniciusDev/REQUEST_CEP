@@ -22,9 +22,9 @@ func fazRequest(ctx context.Context, ch chan<- *Endereco, url string, tipoReques
 	defer close(ch)
 
 	//Por algum motivo o request do viacep está demorando muito para responder, por isso adicionado um time com 350 milisec para validar
-	// if tipoRequest == 2 {
-	// 	time.Sleep(350 * time.Millisecond)
-	// }
+	if tipoRequest == 1 {
+		time.Sleep(800 * time.Millisecond)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 
@@ -55,13 +55,15 @@ func main() {
 	newCh := make(chan *Endereco)
 
 	go fazRequest(ctx, ch, "https://viacep.com.br/ws/15771000/json/", 1)
-	go fazRequest(ctx, newCh, "https://brasilapi.com.br/api/cep/v1/15771000", 2)
+	go fazRequest(ctx, newCh, "https://brasilapi.com.br/api/cep/v1/15771034", 2)
 
 	select {
-	case msg := <-ch:
-		fmt.Println(msg)
-	case msg := <-newCh:
-		fmt.Println(msg)
+	case end := <-ch:
+		fmt.Println("API ViaCep Respondeu primeiro")
+		fmt.Printf("CEP: %s\nUF: %s\nCidade: %s\nBairro: %s\nRua: %s\n", end.Cep, end.Uf, end.Cidade, end.Bairro, end.Rua)
+	case end := <-newCh:
+		fmt.Println("API brasilapi Respondeu primeiro")
+		fmt.Printf("CEP: %s\nUF: %s\nCidade: %s\nBairro: %s\nRua: %s\n", end.Cep, end.Uf, end.Cidade, end.Bairro, end.Rua)
 	case <-ctx.Done():
 		fmt.Println("Timeout")
 	}
