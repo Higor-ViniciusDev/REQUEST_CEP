@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -18,6 +19,13 @@ type Endereco struct {
 }
 
 func fazRequest(ctx context.Context, ch chan<- *Endereco, url string, tipoRequest int) {
+	defer close(ch)
+
+	//Por algum motivo o request do viacep está demorando muito para responder, por isso adicionado um time com 350 milisec para validar
+	// if tipoRequest == 2 {
+	// 	time.Sleep(350 * time.Millisecond)
+	// }
+
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 
 	if err != nil {
@@ -44,9 +52,19 @@ func main() {
 	defer cancel()
 
 	ch := make(chan *Endereco)
+	newCh := make(chan *Endereco)
 
 	go fazRequest(ctx, ch, "https://viacep.com.br/ws/15771000/json/", 1)
-	go fazRequest(ctx, ch, "https://brasilapi.com.br/api/cep/v1/15771000", 2)
+	go fazRequest(ctx, newCh, "https://brasilapi.com.br/api/cep/v1/15771000", 2)
+
+	select {
+	case msg := <-ch:
+		fmt.Println(msg)
+	case msg := <-newCh:
+		fmt.Println(msg)
+	case <-ctx.Done():
+		fmt.Println("Timeout")
+	}
 
 }
 
@@ -71,14 +89,14 @@ func convertJsonRequest(r *http.Response, tipoRequest int) *Endereco {
 		endereco.Uf = data["uf"].(string)
 		endereco.Rua = data["logradouro"].(string)
 		endereco.Cidade = data["localidade"].(string)
-		endereco.TipoResquest = 1
+		endereco.TipoResquest = tipoRequest
 	} else {
 		endereco.Bairro = data["neighborhood"].(string)
 		endereco.Cep = data["cep"].(string)
 		endereco.Uf = data["state"].(string)
 		endereco.Rua = data["street"].(string)
 		endereco.Cidade = data["city"].(string)
-		endereco.TipoResquest = 2
+		endereco.TipoResquest = tipoRequest
 	}
 
 	return &endereco
