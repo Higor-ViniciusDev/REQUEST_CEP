@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -13,11 +12,12 @@ type Endereco struct {
 	Cep          string
 	Uf           string
 	Cidade       string
-	TipoResquest string
+	TipoResquest int
 	Bairro       string
+	Rua          string
 }
 
-func fazRequest(ctx context.Context, ch chan<- Endereco, url string) {
+func fazRequest(ctx context.Context, ch chan<- *Endereco, url string, tipoRequest int) {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 
 	if err != nil {
@@ -33,7 +33,9 @@ func fazRequest(ctx context.Context, ch chan<- Endereco, url string) {
 
 	defer body.Body.Close()
 
-	convertJsonRequest(body)
+	end := convertJsonRequest(body, tipoRequest)
+
+	ch <- end
 }
 
 func main() {
@@ -41,12 +43,14 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	ch := make(chan Endereco)
+	ch := make(chan *Endereco)
 
-	fazRequest(ctx, ch, "https://viacep.com.br/ws/15771000/json/")
+	go fazRequest(ctx, ch, "https://viacep.com.br/ws/15771000/json/", 1)
+	go fazRequest(ctx, ch, "https://brasilapi.com.br/api/cep/v1/15771000", 2)
+
 }
 
-func convertJsonRequest(r *http.Response) {
+func convertJsonRequest(r *http.Response, tipoRequest int) *Endereco {
 	// var textoJson byte
 
 	read, err := io.ReadAll(r.Body)
@@ -60,7 +64,24 @@ func convertJsonRequest(r *http.Response) {
 		panic("ERROR")
 	}
 
-	fmt.Println(data["cep"].(string))
+	endereco := Endereco{}
+	if tipoRequest == 1 {
+		endereco.Bairro = data["bairro"].(string)
+		endereco.Cep = data["cep"].(string)
+		endereco.Uf = data["uf"].(string)
+		endereco.Rua = data["logradouro"].(string)
+		endereco.Cidade = data["localidade"].(string)
+		endereco.TipoResquest = 1
+	} else {
+		endereco.Bairro = data["neighborhood"].(string)
+		endereco.Cep = data["cep"].(string)
+		endereco.Uf = data["state"].(string)
+		endereco.Rua = data["street"].(string)
+		endereco.Cidade = data["city"].(string)
+		endereco.TipoResquest = 2
+	}
+
+	return &endereco
 }
 
 // cep
